@@ -1,6 +1,6 @@
 mod response;
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 #[allow(unused_imports)]
 use std::net::TcpListener;
 use crate::response::Response;
@@ -17,8 +17,8 @@ fn main() {
         match stream {
             Ok(mut _stream) => {
                 println!("accepted new connection");
-                let buf_reader = BufReader::new(&mut _stream);
-                let request_line = buf_reader.lines().next().unwrap().unwrap();
+                let mut buf_reader = BufReader::new(&mut _stream);
+                let request_line = buf_reader.by_ref().lines().next().unwrap().unwrap();
                 let uri: Vec<&str> = request_line.split(" ").collect();
 
                 let mut res = match uri[1] {
@@ -27,6 +27,20 @@ fn main() {
                     res if res.starts_with("/echo/") => {
                         let parameter: Vec<&str> = res.split("/echo/").collect();
                         Response::new(&"200", &"OK", parameter[1])
+                    },
+                    res if res.starts_with("/user-agent") => {
+                        let mut user_agent = String::new();
+                        for line in buf_reader.by_ref().lines() {
+                            let line = line.unwrap();
+                            if line == "\r\n" || line.is_empty() {
+                                break;
+                            }
+
+                            if line.starts_with("User-Agent: ") {
+                                user_agent = line.split("User-Agent: ").collect()
+                            }
+                        }
+                        Response::new(&"200", &"OK", user_agent.as_str())
                     },
                     _ =>  {
                         Response::new(&"404", &"Not Found", "")

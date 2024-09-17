@@ -6,13 +6,13 @@ pub(crate) struct Response {
 }
 
 impl Response {
-    pub fn new() -> Self {
+    pub fn new(status_code: &str, message: &str) -> Self {
         let mut response = Self {
             status: vec![],
             header: vec![],
             body: vec![],
         };
-        response.build_status();
+        response.build_status(status_code, message);
         response.build_header();
         response.build_body();
         response
@@ -25,8 +25,9 @@ impl Response {
         ret
     }
 
-    pub fn build_status(&mut self) {
-        self.status = b"HTTP/1.1 200 OK\r\n".to_vec();
+    pub fn build_status(&mut self, status_code: &str, message: &str) {
+        let status_string = format!("HTTP/1.1 {} {}\r\n", status_code, message);
+        self.status = Vec::from(status_string.as_bytes());
     }
 
     pub fn build_header(&mut self) {

@@ -19,10 +19,18 @@ fn main() {
                 println!("accepted new connection");
                 let buf_reader = BufReader::new(&mut _stream);
                 let request_line = buf_reader.lines().next().unwrap().unwrap();
+                let uri: Vec<&str> = request_line.split(" ").collect();
 
-                let mut res = match request_line.as_str() {
-                    "GET / HTTP/1.1" => { Response::new(&"200", &"OK") },
-                    _ =>  { Response::new(&"404", &"Not Found") },
+                let mut res = match uri[1] {
+                    "/" => { Response::new(&"200", &"OK", "")
+                    },
+                    res if res.starts_with("/echo/") => {
+                        let parameter: Vec<&str> = res.split("/echo/").collect();
+                        Response::new(&"200", &"OK", parameter[1])
+                    },
+                    _ =>  {
+                        Response::new(&"404", &"Not Found", "")
+                    },
                 };
 
                 // run command

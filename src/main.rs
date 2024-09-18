@@ -1,11 +1,14 @@
-mod response;
-
-use std::io::{BufRead, BufReader, Read, Write};
 #[allow(unused_imports)]
+mod response;
+mod file;
+mod request;
+
+use std::env;
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::net::TcpStream;
 use std::thread::spawn;
-use crate::response::Response;
+use crate::response::{Response, ResponseType};
 
 
 fn main() {
@@ -35,13 +38,13 @@ fn handle_connection(mut _stream: TcpStream) {
 
     let mut res = match uri[1] {
         "/" => {
-            Response::new(&"200", &"OK", "")
+            Response::new(&"200", &"OK", "", ResponseType::PlainText)
         }
         res if res.starts_with("/echo/") => {
             let parameter: Vec<&str> = res.split("/echo/").collect();
-            Response::new(&"200", &"OK", parameter[1])
+            Response::new(&"200", &"OK", parameter[1], ResponseType::PlainText)
         }
-        res if res.starts_with("/user-agent") => {
+        res if uri[0] == "GET" && res.starts_with("/user-agent") => {
             let mut user_agent = String::new();
             for line in buf_reader.by_ref().lines() {
                 let line = line.unwrap();
@@ -53,10 +56,25 @@ fn handle_connection(mut _stream: TcpStream) {
                     user_agent = line.split("User-Agent: ").collect()
                 }
             }
-            Response::new(&"200", &"OK", user_agent.as_str())
+            Response::new(&"200", &"OK", user_agent.as_str(), ResponseType::PlainText)
+        }
+        res if uri[0] == "GET" && res.starts_with("/files/") => {
+            let parameters: Vec<&str> = res.split("/files/").collect();
+            let file_name: &str = parameters[1];
+            let env_args: Vec<String> = env::args().collect();
+            let mut dir = env_args[2].clone();
+            dir.push_str(file_name);
+            match file::read_file(dir) {
+                Ok(file_content) => {
+                    Response::new(&"200", &"OK", String::from_utf8(file_content).unwrap().as_str(), ResponseType::OctetStream)
+                }
+                Err(_) => {
+                    Response::new(&"404", &"Not Found", &"", ResponseType::PlainText)
+                }
+            }
         }
         _ => {
-            Response::new(&"404", &"Not Found", "")
+            Response::new(&"404", &"Not Found", "", ResponseType::PlainText)
         }
     };
 

@@ -110,7 +110,7 @@ fn handle_connection(mut _stream: TcpStream) {
         let accept_encodings = request.headers["Accept-Encoding"].clone();
         for accept_encoding in accept_encodings.split(", ") {
             if ACCEPT_ENCODINGS.contains(&accept_encoding) {
-                res.add_header(format!("Content-Encoding: {}", accept_encoding).as_str());
+                res.add_header("Content-Encoding".to_string(), accept_encoding.to_string());
             }
         }
     }

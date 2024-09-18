@@ -27,6 +27,9 @@ impl Response {
         let mut ret = Vec::new();
         ret.extend(&self.status);
         ret.extend(&self.header);
+        if self.body.len() > 0 {
+            ret.extend(b"\r\n");
+        }
         ret.extend(&self.body);
         ret
     }
@@ -48,15 +51,16 @@ impl Response {
         }
         let content_length = format!("Content-Length: {}\r\n", response_body.len());
         header.push_str(content_length.as_str());
-
-        if response_body.len() > 0 {
-            header.push_str("\r\n");
-        }
         self.header = header.as_bytes().to_vec();
     }
 
     fn build_body(&mut self, response_body: &str) {
         self.body = format!("{}\r\n", response_body).as_bytes().to_vec();
+    }
+
+    pub fn add_header(&mut self, header: &str) {
+        let custom_header = format!("{}\r\n", header);
+        self.header.extend(custom_header.as_bytes());
     }
 }
 

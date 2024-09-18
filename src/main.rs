@@ -3,12 +3,15 @@ mod response;
 mod file;
 mod request;
 
-use std::{env, io};
-use std::io::{BufRead, Read, Write};
+use std::{env};
+use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::net::TcpStream;
 use std::thread::spawn;
+use crate::request::{HttpMethod, Request};
 use crate::response::{Response, ResponseType};
+
+const BUFFER_SIZE: usize = 2048;
 
 
 fn main() {
@@ -32,37 +35,39 @@ fn main() {
 }
 
 fn handle_connection(mut _stream: TcpStream) {
-    // process with String or bytes?
-    let mut buffer = [0; 2048]; // by bytes
-    _stream.read(&mut buffer).unwrap();
-    let request_str = std::str::from_utf8(&buffer).unwrap();  // by string
-    let lines: Vec<String> = request_str.lines().map(|line| line.to_string()).collect();
-    let request_line = lines.first().unwrap().to_string();
-    let uri: Vec<&str> = request_line.split(" ").collect();
+    // read buffer
+    let mut buffer = [0; BUFFER_SIZE];
+    let mut data = Vec::new();
+    loop {
+        let n = _stream.read(&mut buffer).unwrap();
 
-    let mut res = match uri[1] {
+        if n == 0 {
+            break;
+        }
+        data.extend_from_slice(&buffer[..n]);
+        if n < BUFFER_SIZE {
+            break;
+        }
+    }
+    let request = Request::from_buffer(data);
+
+    let mut res = match request.uri.as_str() {
         "/" => {
             Response::new(&"200", &"OK", "", ResponseType::PlainText)
         }
-        res if res.starts_with("/echo/") => {
-            let parameter: Vec<&str> = res.split("/echo/").collect();
+        uri if uri.starts_with("/echo/") => {
+            let parameter: Vec<&str> = uri.split("/echo/").collect();
             Response::new(&"200", &"OK", parameter[1], ResponseType::PlainText)
         }
-        res if uri[0] == "GET" && res.starts_with("/user-agent") => {
+        uri if request.method == HttpMethod::Get && uri.starts_with("/user-agent") => {
             let mut user_agent = String::new();
-            for line in lines {
-                if line == "\r\n" || line.is_empty() {
-                    break;
-                }
-
-                if line.starts_with("User-Agent: ") {
-                    user_agent = line.split("User-Agent: ").collect()
-                }
+            if request.headers.contains_key("User-Agent") {
+                user_agent = request.headers["User-Agent"].clone();
             }
             Response::new(&"200", &"OK", user_agent.as_str(), ResponseType::PlainText)
         }
-        res if uri[0] == "GET" && res.starts_with("/files/") => {
-            let parameters: Vec<&str> = res.split("/files/").collect();
+        uri if request.method == HttpMethod::Get && uri.starts_with("/files/") => {
+            let parameters: Vec<&str> = uri.split("/files/").collect();
             let file_name: &str = parameters[1];
             let env_args: Vec<String> = env::args().collect();
             let mut dir = env_args[2].clone();
@@ -76,31 +81,17 @@ fn handle_connection(mut _stream: TcpStream) {
                 }
             }
         }
-        res if uri[0] == "POST" && res.starts_with("/files/") => {
-            let parameters: Vec<&str> = res.split("/files/").collect();
+        uri if request.method == HttpMethod::Post && uri.starts_with("/files/") => {
+            let parameters: Vec<&str> = uri.split("/files/").collect();
             let file_name: &str = parameters[1];
             let env_args: Vec<String> = env::args().collect();
             let mut dir = env_args[2].clone();
             // let mut dir = ".\\".to_string();
             dir.push_str(file_name);
 
-            let mut contents_length: usize = 0;
-            for line in lines {
-                if line.starts_with("Content-Length: ") {
-                    let mut tmp_size = String::new();
-                    tmp_size = line.split("Content-Length: ").collect();
-                    contents_length = tmp_size.parse().unwrap();
-                }
-            }
-            let mut contents: Vec<u8> = Vec::new();
-            if let Some(pos) = buffer.windows(4).position(|window| window == b"\r\n\r\n") {
-                contents.extend_from_slice(&buffer[pos + 4..pos + 4 + contents_length]); // 헤더를 건너뛰고 내용만 추출
-                Ok(contents.clone())
-            } else {
-                Err(io::Error::new(io::ErrorKind::InvalidData, "No boundary found"))
-            }.unwrap();
+            let contents: Vec<u8> = request.body.clone();
             match file::write_file(dir, &contents) {
-                Ok(file_content) => {
+                Ok(_) => {
                     Response::new(&"201", &"Created", &"", ResponseType::OctetStream)
                 }
                 Err(_) => {
@@ -112,6 +103,13 @@ fn handle_connection(mut _stream: TcpStream) {
             Response::new(&"404", &"Not Found", "", ResponseType::PlainText)
         }
     };
+
+    // common processing
+    if request.headers.contains_key("Accept-Encoding") {
+        if request.headers["Accept-Encoding"] == "gzip" {
+            res.add_header("Content-Encoding: gzip");
+        }
+    }
 
     // run command
     _stream.write(res.build().as_slice())

@@ -13,5 +13,6 @@ if __name__ == "__main__":
 
     # soc.send(b"GET /echo/grape HTTP/1.1\r\nHost: localhost:4221\r\n\r\n")
     # soc.send(b"GET /user-agent HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: raspberry/raspberry-banana\r\n\r\n")
+    soc.send(b"POST /files/strawberry_pineapple_pineapple_pear HTTP/1.1\r\nHost: localhost:4221\r\nContent-Length: 64\r\nContent-Type: application/octet-stream\r\n\r\nmango pineapple raspberry apple pear raspberry strawberry orange")
 
     print(soc.recv(1024))

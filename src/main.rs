@@ -12,6 +12,7 @@ use crate::request::{HttpMethod, Request};
 use crate::response::{Response, ResponseType};
 
 const BUFFER_SIZE: usize = 2048;
+const ACCEPT_ENCODINGS: [&str; 1] = ["gzip"];
 
 
 fn main() {
@@ -106,8 +107,11 @@ fn handle_connection(mut _stream: TcpStream) {
 
     // common processing
     if request.headers.contains_key("Accept-Encoding") {
-        if request.headers["Accept-Encoding"] == "gzip" {
-            res.add_header("Content-Encoding: gzip");
+        let accept_encodings = request.headers["Accept-Encoding"].clone();
+        for accept_encoding in accept_encodings.split(", ") {
+            if ACCEPT_ENCODINGS.contains(&accept_encoding) {
+                res.add_header(format!("Content-Encoding: {}", accept_encoding).as_str());
+            }
         }
     }
 
